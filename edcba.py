@@ -37,18 +37,21 @@ else:
 
 #FIXME: Hardcoded to the first entry only for the disc_id
 try:
+    #pprint( result[r_index] )
     release_id = result[r_index]["release-list"][0]['id']
     release_artist = result[r_index]["release-list"][0]['artist-credit-phrase']
     release_title = result[r_index]["release-list"][0]['title']
+    release_date = result[r_index]["release-list"][0]['date']
     release_track_list = result[r_index]["release-list"][0]['medium-list'][0]['track-list']
 except KeyError:
     pprint( "Couldnt find values" )
     raise Exception
 
-#pprint( "Release id: %s" %( release_id ) )
-#pprint( "Release artist: %s" %( release_artist ) )
-#pprint( "Release title: %s" %( release_title ) )
-pprint( "Release release_track_list: %s" %( release_track_list[0]  ) )
+pprint( "Release id: %s" %( release_id ) )
+pprint( "Release artist: %s" %( release_artist ) )
+pprint( "Release title: %s" %( release_title ) )
+pprint( "Release date: %s" %( release_date ) )
+#pprint( "Release release_track_list: %s" %( release_track_list  ) )
 
 try:
     cover_art_list = musicbrainzngs.get_image_list( release_id )
@@ -58,20 +61,33 @@ except Exception:
     pprint( "Couldnt find values" )
     raise Exception
 
-wav_file = "abcde.820a8a0b/track01-moo.wav"
-enc_file = "abcde.820a8a0b/track01-moo.ogg"
-rip_command = shlex.split( "%s -d %s %s %s"%("cdparanoia", "/dev/sr0", "01", "abcde.820a8a0b/track01-moo.wav") )
-try:
-    p1 = subprocess.check_call(rip_command, stdout=subprocess.PIPE)
-except subprocess.CalledProcessError:
-    pprint( "cdparadnoia failed" )
-    raise Exception
+wav_dir = "abcde.820a8a0b"
+enc_dir = "abcde.820a8a0b"
+for release_track in release_track_list:
+    #pprint( release_track )
+    # Do I need position or number
+    track_number = release_track['number'].zfill(2)
+    track_position = release_track['position'].zfill(2)
+    track_title = release_track['recording']['title'].replace(" ","_")
+    pprint( track_title )
 
-encoder='oggenc'
-encode_command=shlex.split( "%s %s --output %s"%(encoder, wav_file, enc_file) )
-try:
-    p1 = subprocess.check_call( encode_command, stdout=subprocess.PIPE)
-except subprocess.CalledProcessError:
-    pprint( "encoder failed" )
-    raise Exception
+    wav_file = "%s/%s_%s.wav"%( wav_dir, track_number, track_title)
+    enc_file = "%s/%s_%s.%s"%( enc_dir, track_number, track_title, "ogg")
+
+    rip_command = shlex.split( "%s -d %s %s %s"%("cdparanoia", "/dev/sr0", track_number, wav_file) )
+    try:
+        pprint( rip_command )
+        p1 = subprocess.check_call(rip_command, stdout=subprocess.PIPE)
+    except subprocess.CalledProcessError:
+        pprint( "cdparadnoia failed" )
+        raise Exception
+
+    encoder='oggenc'
+    encode_command=shlex.split( "%s %s --output %s"%(encoder, wav_file, enc_file) )
+    try:
+        pprint( encode_command )
+        p1 = subprocess.check_call( encode_command, stdout=subprocess.PIPE)
+    except subprocess.CalledProcessError:
+        pprint( "encoder failed" )
+        raise Exception
 
