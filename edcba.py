@@ -1,6 +1,8 @@
 import sys
 import discid
 import musicbrainzngs
+import subprocess
+import shlex
 
 from pprint import pprint
 
@@ -50,10 +52,26 @@ pprint( "Release release_track_list: %s" %( release_track_list[0]  ) )
 
 try:
     cover_art_list = musicbrainzngs.get_image_list( release_id )
+    #pprint( cover_art_list )
+    #pprint( cover_art_list['images'][0]['image'] )
 except Exception:
     pprint( "Couldnt find values" )
     raise Exception
 
-#pprint( cover_art_list )
-#pprint( cover_art_list['images'][0]['image'] )
+wav_file = "abcde.820a8a0b/track01-moo.wav"
+enc_file = "abcde.820a8a0b/track01-moo.ogg"
+rip_command = shlex.split( "%s -d %s %s %s"%("cdparanoia", "/dev/sr0", "01", "abcde.820a8a0b/track01-moo.wav") )
+try:
+    p1 = subprocess.check_call(rip_command, stdout=subprocess.PIPE)
+except subprocess.CalledProcessError:
+    pprint( "cdparadnoia failed" )
+    raise Exception
+
+encoder='oggenc'
+encode_command=shlex.split( "%s %s --output %s"%(encoder, wav_file, enc_file) )
+try:
+    p1 = subprocess.check_call( encode_command, stdout=subprocess.PIPE)
+except subprocess.CalledProcessError:
+    pprint( "encoder failed" )
+    raise Exception
 
