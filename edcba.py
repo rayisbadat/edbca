@@ -1,12 +1,14 @@
 #!/usr/bin/env python
-import sys
+import logging
 import os
+from pprint import pprint
+import shlex
+import sys
+import subprocess
+
 import discid
 import musicbrainzngs
-import subprocess
-import shlex
-from pprint import pprint
-import logging
+import requests
 
 
 encoder='oggenc'
@@ -58,21 +60,12 @@ def main():
     except Exception as e:
         logger.critical(e)
         raise Exception
-    
-    logger.info( "Release id: %s" %( release_id ) )
-    logger.info( "Release id_short: %s" %( release_id_short ) )
-    logger.info( "Release artist: %s" %( release_artist ) )
-    logger.info( "Release title: %s" %( release_title ) )
-    logger.info( "Release date: %s" %( release_date ) )
-    logger.info( "Release year: %s" %( release_year ) )
-    #logger.info( "Release release_track_list: %s" %( release_track_list  ) )
-    
+
     try:
         cover_art_list = musicbrainzngs.get_image_list( release_id )
     except Exception:
         logger.critical( "Couldnt find values" )
         raise Exception
-    
     try:
         cover_art_url = cover_art_list['images'][0]['image']
     except KeyError:
@@ -81,10 +74,21 @@ def main():
     except Exception as e:
         logger.critical( e )
         raise Exception
+
     
+    logger.info( "Release id: %s" %( release_id ) )
+    logger.info( "Release id_short: %s" %( release_id_short ) )
+    logger.info( "Release artist: %s" %( release_artist ) )
+    logger.info( "Release title: %s" %( release_title ) )
+    logger.info( "Release date: %s" %( release_date ) )
+    logger.info( "Release year: %s" %( release_year ) )
+    logger.info( "Album Art Url: %s" %( cover_art_url ) )
+    #logger.info( "Release release_track_list: %s" %( release_track_list  ) )
+
+    #Create the temp and dst directory
     wav_dir = "tmp_edcba.%s"%(release_id_short)
     enc_dir = "%s_%s"%(release_year,release_title)
-    
+    album_art_file = "%s/cover.jpg"%(enc_dir)
     try:
         os.mkdir( wav_dir )
     except FileExistsError:
@@ -100,6 +104,23 @@ def main():
         logger.critical( "Exception mkdir %s: " %(enc_dir,e) )
         raise Exception
     
+    #Try to download album art
+    try:
+        r = requests.get(cover_art_url, stream=True)
+        logger.debug( "Successfully downloaded %s"%(cover_art_url))
+    except requests.exceptions as e:
+        logger.critical( "Failed to download album art: %s"%(e) )
+        raise Exception
+    try:
+        with open(album_art_file, 'wb') as fd:
+            for chunk in r.iter_content(chunk_size=128):
+                fd.write(chunk)
+        logger.info( "Successfully wrote album art from %s to %s ."%(cover_art_url,album_art_file))
+    except Exception as e:
+        logger.critical( "Failed to write album art to %s: %s"%(album_art_file,e) )
+        raise Exception
+
+    # Rip and encode each track
     for release_track in release_track_list:
         # Do I need position or number
         track_number = release_track['number'].zfill(2)
