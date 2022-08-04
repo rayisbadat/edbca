@@ -49,8 +49,8 @@ def main():
     try:
         release_id = result[r_index]["release-list"][0]['id']
         release_id_short = release_id.split("-")[0]
-        release_artist = result[r_index]["release-list"][0]['artist-credit-phrase'].replace(" ","_")
-        release_title = result[r_index]["release-list"][0]['title'].replace(" ","_")
+        release_artist = result[r_index]["release-list"][0]['artist-credit-phrase']
+        release_title = result[r_index]["release-list"][0]['title']
         release_date = result[r_index]["release-list"][0]['date']
         release_year = release_date.split("-")[0]
         release_track_list = result[r_index]["release-list"][0]['medium-list'][0]['track-list']
@@ -60,6 +60,13 @@ def main():
     except Exception as e:
         logger.critical(e)
         raise Exception
+
+    #Genre not always there
+    try:
+        release_genre = result[r_index]["release-list"][0]['genre']
+    except:
+        release_genre = None
+
 
     try:
         cover_art_list = musicbrainzngs.get_image_list( release_id )
@@ -87,7 +94,7 @@ def main():
 
     #Create the temp and dst directory
     wav_dir = "tmp_edcba.%s"%(release_id_short)
-    enc_dir = "%s_%s"%(release_year,release_title)
+    enc_dir = "%s_%s"%(release_year,release_title.replace(" ","_"))
     album_art_file = "%s/cover.jpg"%(enc_dir)
     try:
         os.mkdir( wav_dir )
@@ -125,20 +132,36 @@ def main():
         # Do I need position or number
         track_number = release_track['number'].zfill(2)
         track_position = release_track['position'].zfill(2)
-        track_title = release_track['recording']['title'].replace(" ","_")
+        track_title = release_track['recording']['title']
     
-        wav_file = "%s/%s_%s.wav"%( wav_dir, track_number, track_title)
-        enc_file = "%s/%s_%s.%s"%( enc_dir, track_number, track_title, "ogg")
-    
+        wav_file = "%s/%s_%s.wav"%( wav_dir, track_number, track_title.replace(" ","_"))
+        enc_file = "%s/%s_%s.%s"%( enc_dir, track_number, track_title.replace(" ","_"), "ogg")
+
+        #FIXME: Hardcoded to oggenc 
+        #FIXME: change the --artist to the track artist from musicbrainz
+        tag_flags = '--artist "%s" --album "%s" --title "%s" --date "%s" --tracknum "%s" --comment "albumartist=%s" --comment "CDDB=%s"'%(
+            release_artist,
+            release_title,
+            track_title,
+            release_date,
+            track_number,
+            release_artist,
+            release_id_short,
+        )
+
+        if release_genre:
+            tag_flags += ' --genre "%s"'
+
         rip_command = shlex.split( "%s -d %s %s %s"%("cdparanoia", "/dev/sr0", track_number, wav_file) )
         try:
             logger.debug( rip_command )
-            p1 = subprocess.check_call(rip_command, stdout=subprocess.PIPE)
+            #p1 = subprocess.check_call(rip_command, stdout=subprocess.PIPE)
         except subprocess.CalledProcessError:
             logger.critical( "cdparadnoia failed" )
             raise Exception
     
-        encode_command=shlex.split( "%s %s --output %s"%(encoder, wav_file, enc_file) )
+        encode_command=shlex.split( "%s %s --output %s %s"%(encoder, wav_file, enc_file, tag_flags) )
+        pprint( encode_command )
         try:
             logger.debug( encode_command )
             p1 = subprocess.check_call( encode_command, stdout=subprocess.PIPE)
