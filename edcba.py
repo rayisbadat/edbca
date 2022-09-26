@@ -5,6 +5,7 @@ import shlex
 import sys
 import subprocess
 import re
+import argparse
 
 #Musicbrainz
 import discid
@@ -14,8 +15,20 @@ import requests
 #Debug
 from pprint import pprint
 
+#Logging
+logger = logging.getLogger('edcba')
+logger.setLevel(logging.INFO)
+#logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+formatter = logging.Formatter('%(levelname)s: %(message)s')
+#formatter = logging.Formatter('%(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
 
+#Hard coded encoder
 encoder='oggenc'
+
+#Set useragent needed by musicbrainz db
 musicbrainzngs.set_useragent("edcba cd ripper", "0.1", "")
 
 def clean_string( string_value):
@@ -27,30 +40,44 @@ def clean_string( string_value):
     regex="[^a-zA-z0-9()]+"
     regexed_string = re.sub(regex, "_", string_value)
     return regexed_string.rstrip("_")
-    
 
-def main():
+def validate_disc_id( disc_id ):
+  if disc_id:
+    return disc_id
+  raise ValueError
+
+def validate_release_id( release_id ):
+  if release_id:
+    return release_id
+  raise ValueError
+
+def validate_release_group_id( release_group_id ):
+  if release_group_id:
+    return release_group_id
+  raise ValueError   
+
+def main( args=None ):
     """
     """
 
-    #Logging
-    logger = logging.getLogger('edcba')
-    logger.setLevel(logging.INFO)
-    #logger.setLevel(logging.DEBUG)
-    ch = logging.StreamHandler()
-    formatter = logging.Formatter('%(levelname)s: %(message)s')
-    #formatter = logging.Formatter('%(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
+    if args.disc_id:
+        disc_id = args.disc_id
+    else:
+        disc = discid.read()  # use default device
+        disc_id = disc.id
+    logger.info("id: %s" % disc_id)
 
-    disc = discid.read()  # use default device
-    logger.info("id: %s" % disc.id)
-    
+    if args.release_group_id:
+        release_group_id = args.release_group_id
+    else:
+        release_group_id = None
+
     try:
-        result = musicbrainzngs.get_releases_by_discid(disc.id,includes=["artists", "recordings"])
+        result = musicbrainzngs.get_releases_by_discid(disc_id,includes=["artists", "recordings"])
         logger.debug( result )
     except musicbrainzngs.ResponseError:
         logger.critical("disc not found or bad response")
+        exit(1)
         raise Exception
     
     if result.get("disc"):
@@ -58,7 +85,7 @@ def main():
     elif result.get("cdstub"):
         r_index='cdstub'
     else:
-        logger.critical("couldnt get disc or cdstub")
+        logger.critical("couldnt get disc or cdstub key index")
         raise Exception
     
     #FIXME: Hardcoded to the first entry only for the disc_id
@@ -84,12 +111,23 @@ def main():
     except:
         release_genre = None
 
-    try:
-        cover_art_list = musicbrainzngs.get_image_list( release_id )
-    except Exception:
-        logger.critical( "Couldnt find value cover_art_list" )
-        cover_art_list = None
-        #raise Exception
+    #If we were given a release group extract album art list
+    cover_art_list=None
+    if release_group_id:
+        try:
+            cover_art_list=musicbrainzngs.get_release_group_image_list( release_group_id )
+        except:
+            logger.debug("Could not pull image list from release group id: %s"%( release_group_id ) )
+
+    # Try to pull album art from release and if not try release-group
+    if cover_art_list == None:
+        try:
+            cover_art_list = musicbrainzngs.get_image_list( release_id )
+        except:
+            artist_id = result[r_index]["release-list"][0]['artist-credit'][0]['artist']['id']
+            release_group_id=musicbrainzngs.search_release_groups(arid=artist_id,reid=release_id,strict=True)['release-group-list'][0]['id']
+            cover_art_list=musicbrainzngs.get_release_group_image_list( release_group_id )
+            logger.critical( "Couldnt find value cover_art_list" )
 
     if cover_art_list:
       try:
@@ -101,12 +139,7 @@ def main():
           logger.critical( e )
           raise Exception
     else:
-        try: 
-            artist_id = result[r_index]["release-list"][0]['artist-credit'][0]['artist']['id']
-            release_group_id=musicbrainzngs.search_release_groups(arid=artist_id,reid=release_id,strict=True)['release-group-list'][0]['id']
-            cover_art_url=musicbrainzngs.get_release_group_image_list( release_group_id )['images'][0]['image']
-        except:
-            cover_art_url = None
+        cover_art_url = None
     
     logger.info( "Release id: %s" %( release_id ) )
     logger.info( "Release id_short: %s" %( release_id_short ) )
@@ -213,5 +246,11 @@ if __name__ == "__main__":
 
     #Set up logging
     funcName = __name__
-    
-    main()
+
+    #Args
+    parser = argparse.ArgumentParser(description='CLI Flags or overrides')
+    parser.add_argument('-d', '--disc-id', dest='disc_id', help='Override release (cd) id from musicbrainz.', default=None, required=False, type=validate_disc_id)
+    parser.add_argument('-g', '--release-group-id', dest='release_group_id', help='Override release (cd) id with a release-group from musicbrainz.', default=None, required=False, type=validate_release_group_id)
+    args = parser.parse_args()
+
+    main(args=args)
