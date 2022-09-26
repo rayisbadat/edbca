@@ -48,7 +48,7 @@ def main():
     
     try:
         result = musicbrainzngs.get_releases_by_discid(disc.id,includes=["artists", "recordings"])
-        #logger.debug( result )
+        logger.debug( result )
     except musicbrainzngs.ResponseError:
         logger.critical("disc not found or bad response")
         raise Exception
@@ -101,7 +101,12 @@ def main():
           logger.critical( e )
           raise Exception
     else:
-        cover_art_url = None
+        try: 
+            artist_id = result[r_index]["release-list"][0]['artist-credit'][0]['artist']['id']
+            release_group_id=musicbrainzngs.search_release_groups(arid=artist_id,reid=release_id,strict=True)['release-group-list'][0]['id']
+            cover_art_url=musicbrainzngs.get_release_group_image_list( release_group_id )['images'][0]['image']
+        except:
+            cover_art_url = None
     
     logger.info( "Release id: %s" %( release_id ) )
     logger.info( "Release id_short: %s" %( release_id_short ) )
