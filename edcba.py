@@ -73,31 +73,41 @@ def main( args=None ):
         release_group_id = None
 
     try:
-        result = musicbrainzngs.get_releases_by_discid(disc_id,includes=["artists", "recordings"])
-        logger.debug( result )
+        if args.release_id:
+            result_raw = musicbrainzngs.get_release_by_id(args.release_id,includes=["artists", "recordings"])
+        else:
+            result_raw = musicbrainzngs.get_releases_by_discid(disc_id,includes=["artists", "recordings"])
+        logger.debug( result_raw )
     except musicbrainzngs.ResponseError:
         logger.critical("disc not found or bad response")
         exit(1)
         raise Exception
     
-    if result.get("disc"):
+    if result_raw.get("disc"):
         r_index='disc'
-    elif result.get("cdstub"):
+        s_index='release-list'
+        result=result_raw[r_index][s_index][0]
+    elif result_raw.get("cdstub"):
         r_index='cdstub'
+        s_index='release-list'
+        result=result_raw[r_index][s_index][0]
+    elif result_raw.get("release"):
+        r_index='release'
+        s_index='medium-list'
+        result=result_raw[r_index]
     else:
         logger.critical("couldnt get disc or cdstub key index")
         raise Exception
-    
+
+    pprint( result )
     #FIXME: Hardcoded to the first entry only for the disc_id
     try:
-        release_id = result[r_index]["release-list"][0]['id']
+        release_id = result['id']
         release_id_short = release_id.split("-")[0]
-        release_artist = result[r_index]["release-list"][0]['artist-credit-phrase']
-        release_title_raw = result[r_index]["release-list"][0]['title']
+        release_artist = result['artist-credit-phrase']
+        release_title_raw = result['title']
         release_title_clean = clean_string( release_title_raw )
-        release_date = result[r_index]["release-list"][0]['date']
-        release_year = release_date.split("-")[0]
-        release_track_list = result[r_index]["release-list"][0]['medium-list'][0]['track-list']
+        release_track_list = result['medium-list'][0]['track-list']
     except KeyError:
         logger.critical("Couldnt find values")
         raise Exception
@@ -105,9 +115,16 @@ def main( args=None ):
         logger.critical(e)
         raise Exception
 
+    try:
+        release_date = result['date']
+        release_year = release_date.split("-")[0]
+    except:
+        release_date = '0000-00-00'
+        release_year = release_date.split("-")[0]
+
     #Genre not always there
     try:
-        release_genre = result[r_index]["release-list"][0]['genre']
+        release_genre = result['genre']
     except:
         release_genre = None
 
@@ -117,17 +134,27 @@ def main( args=None ):
         try:
             cover_art_list=musicbrainzngs.get_release_group_image_list( release_group_id )
         except:
+            cover_art_list=None
             logger.debug("Could not pull image list from release group id: %s"%( release_group_id ) )
 
     # Try to pull album art from release and if not try release-group
-    if cover_art_list == None:
+    if not cover_art_list:
         try:
             cover_art_list = musicbrainzngs.get_image_list( release_id )
         except:
-            artist_id = result[r_index]["release-list"][0]['artist-credit'][0]['artist']['id']
-            release_group_id=musicbrainzngs.search_release_groups(arid=artist_id,reid=release_id,strict=True)['release-group-list'][0]['id']
-            cover_art_list=musicbrainzngs.get_release_group_image_list( release_group_id )
-            logger.critical( "Couldnt find value cover_art_list" )
+            if 'artist' in result.keys():
+                artist_id = result['artist']['id']
+            elif 'artist-credit' in result.keys():
+                artist_id = result['artist-credit'][0]['artist']['id']
+            else:
+                artist_id = None
+
+            if artist_id:
+                release_group_id=musicbrainzngs.search_release_groups(arid=artist_id,reid=release_id,strict=True)['release-group-list'][0]['id']
+                cover_art_list=musicbrainzngs.get_release_group_image_list( release_group_id )
+                logger.warn( "Couldnt find value cover_art_list" )
+            else:
+                cover_art_list=None
 
     if cover_art_list:
       try:
@@ -250,6 +277,7 @@ if __name__ == "__main__":
     #Args
     parser = argparse.ArgumentParser(description='CLI Flags or overrides')
     parser.add_argument('-d', '--disc-id', dest='disc_id', help='Override release (cd) id from musicbrainz.', default=None, required=False, type=validate_disc_id)
+    parser.add_argument('-r', '--release', dest='release_id', help='Override release (cd) id with a release from musicbrainz.', default=None, required=False, type=validate_release_id)
     parser.add_argument('-g', '--release-group-id', dest='release_group_id', help='Override release (cd) id with a release-group from musicbrainz.', default=None, required=False, type=validate_release_group_id)
     args = parser.parse_args()
 
