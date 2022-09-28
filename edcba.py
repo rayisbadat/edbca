@@ -56,31 +56,22 @@ def validate_release_group_id( release_group_id ):
     return release_group_id
   raise ValueError   
 
-def main( args=None ):
+def get_result():
     """
     """
+    return None
 
-    if args.disc_id:
-        disc_id = args.disc_id
-    else:
-        disc = discid.read()  # use default device
-        disc_id = disc.id
-    logger.info("id: %s" % disc_id)
-
-    if args.release_group_id:
-        release_group_id = args.release_group_id
-    else:
-        release_group_id = None
-
+def get_result(release_id=None, disc_id=None):
+    """
+    """
     try:
-        if args.release_id:
+        if release_id:
             result_raw = musicbrainzngs.get_release_by_id(args.release_id,includes=["artists", "recordings"])
         else:
             result_raw = musicbrainzngs.get_releases_by_discid(disc_id,includes=["artists", "recordings"])
         logger.debug( result_raw )
     except musicbrainzngs.ResponseError:
         logger.critical("disc not found or bad response")
-        exit(1)
         raise Exception
     
     if result_raw.get("disc"):
@@ -98,6 +89,97 @@ def main( args=None ):
     else:
         logger.critical("couldnt get disc or cdstub key index")
         raise Exception
+
+    return result
+
+def get_cover_art_url(release_group_id=None, release_id=None ):
+    """
+    """
+
+    #If we were given a release group extract album art list
+    cover_art_list=None
+
+    if release_group_id:
+        try:
+            cover_art_list=musicbrainzngs.get_release_group_image_list( release_group_id )
+        except:
+            cover_art_list=None
+            logger.debug("Could not pull image list from release group id: %s"%( release_group_id ) )
+
+    # Try to pull album art from release and if not try release-group
+    if not cover_art_list:
+        try:
+            cover_art_list = musicbrainzngs.get_image_list( release_id )
+        except:
+            if 'artist' in result.keys():
+                artist_id = result['artist']['id']
+            elif 'artist-credit' in result.keys():
+                artist_id = result['artist-credit'][0]['artist']['id']
+            else:
+                artist_id = None
+
+            if artist_id:
+                release_group_id=musicbrainzngs.search_release_groups(arid=artist_id,reid=release_id,strict=True)['release-group-list'][0]['id']
+                cover_art_list=musicbrainzngs.get_release_group_image_list( release_group_id )
+                logger.warn( "Couldnt find value cover_art_list" )
+            else:
+                cover_art_list=None
+
+    if cover_art_list:
+        try:
+            cover_art_url = cover_art_list['images'][0]['image']
+        except KeyError as e:
+            logger.warn( "Couldnt extract cover_art_list URL: %s"%(e) )
+            cover_art_url = None
+            #raise Exception
+        except Exception as e:
+            logger.warn( "Couldnt extract cover_art_list URL: %s"%(e) )
+            #raise Exception
+    else:
+        cover_art_url = None
+
+    return cover_art_url
+
+def make_rip_dirs(wav_dir, enc_dir):
+    """
+    """
+    try:
+        os.mkdir( wav_dir )
+    except FileExistsError:
+        logger.warning( "%s already exists" %( wav_dir) )
+    except Exception as e:
+        logger.critical( "Exception mkdir %s: " %(wav_dir,e) )
+        raise Exception
+    try:
+        os.mkdir( enc_dir )
+    except FileExistsError:
+        logger.warning( "%s already exists" %( enc_dir) )
+    except Exception as e:
+        logger.critical( "Exception mkdir %s: " %(enc_dir,e) )
+        raise Exception
+
+###### Main ######
+def main( args=None ):
+    """
+    """
+
+    if args.disc_id:
+        disc_id = args.disc_id
+    else:
+        disc = discid.read()  # use default device
+        disc_id = disc.id
+
+    if args.release_group_id:
+        release_group_id = args.release_group_id
+        logger.info("release id: %s" % disc_id)
+    else:
+        logger.info("disc id: %s" % disc_id)
+        release_group_id = None
+
+    try:
+        result = get_result(release_id=args.release_id, disc_id=disc_id)
+    except Exception as e:
+        logger.critical( "Error trying to get disc/release info from musicbrainz: %s"%(e) )
 
     #FIXME: Hardcoded to the first entry only for the disc_id
     try:
@@ -127,46 +209,10 @@ def main( args=None ):
     except:
         release_genre = None
 
-    #If we were given a release group extract album art list
-    cover_art_list=None
-    if release_group_id:
-        try:
-            cover_art_list=musicbrainzngs.get_release_group_image_list( release_group_id )
-        except:
-            cover_art_list=None
-            logger.debug("Could not pull image list from release group id: %s"%( release_group_id ) )
-
-    # Try to pull album art from release and if not try release-group
-    if not cover_art_list:
-        try:
-            cover_art_list = musicbrainzngs.get_image_list( release_id )
-        except:
-            if 'artist' in result.keys():
-                artist_id = result['artist']['id']
-            elif 'artist-credit' in result.keys():
-                artist_id = result['artist-credit'][0]['artist']['id']
-            else:
-                artist_id = None
-
-            if artist_id:
-                release_group_id=musicbrainzngs.search_release_groups(arid=artist_id,reid=release_id,strict=True)['release-group-list'][0]['id']
-                cover_art_list=musicbrainzngs.get_release_group_image_list( release_group_id )
-                logger.warn( "Couldnt find value cover_art_list" )
-            else:
-                cover_art_list=None
-
-    if cover_art_list:
-      try:
-          cover_art_url = cover_art_list['images'][0]['image']
-      except KeyError:
-          logger.critical( "Couldnt extract cover_art_list URL" )
-          raise Exception
-      except Exception as e:
-          logger.critical( e )
-          raise Exception
-    else:
-        cover_art_url = None
+    #Get the cover art url if possible
+    cover_art_url =  get_cover_art_url(release_group_id=release_group_id, release_id=release_id )
     
+    #Print out harvested cd info
     logger.info( "Release id: %s" %( release_id ) )
     logger.info( "Release id_short: %s" %( release_id_short ) )
     logger.info( "Release artist: %s" %( release_artist ) )
@@ -174,27 +220,20 @@ def main( args=None ):
     logger.info( "Release date: %s" %( release_date ) )
     logger.info( "Release year: %s" %( release_year ) )
     logger.info( "Album Art Url: %s" %( cover_art_url ) )
-    #logger.info( "Release release_track_list: %s" %( release_track_list  ) )
+    logger.debug( "Release release_track_list: %s" %( release_track_list  ) )
 
     #Create the temp and dst directory
     wav_dir = "tmp_edcba.%s"%(release_id_short)
     enc_dir = "%s_%s"%(release_year,release_title_clean)
     album_art_file = "%s/cover.jpg"%(enc_dir)
+
+    #Make rip directories
     try:
-        os.mkdir( wav_dir )
-    except FileExistsError:
-        logger.warning( "%s already exists" %( wav_dir) )
+        make_rip_dirs(wav_dir=wav_dir, enc_dir=enc_dir)
     except Exception as e:
-        logger.critical( "Exception mkdir %s: " %(wav_dir,e) )
-        raise Exception
-    try:
-        os.mkdir( enc_dir )
-    except FileExistsError:
-        logger.warning( "%s already exists" %( enc_dir) )
-    except Exception as e:
-        logger.critical( "Exception mkdir %s: " %(enc_dir,e) )
-        raise Exception
-    
+        logger.critical( "Couldnt mkdirs : %s"%(e) )
+        exit( 1 )
+
     #Try to download album art
     if cover_art_url:
       try:
