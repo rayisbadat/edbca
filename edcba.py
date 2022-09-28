@@ -99,7 +99,6 @@ def main( args=None ):
         logger.critical("couldnt get disc or cdstub key index")
         raise Exception
 
-    pprint( result )
     #FIXME: Hardcoded to the first entry only for the disc_id
     try:
         release_id = result['id']
