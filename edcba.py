@@ -71,9 +71,11 @@ def get_result(release_id=None, disc_id=None):
         else:
             result_raw = musicbrainzngs.get_releases_by_discid(disc_id,includes=["artists", "recordings", "release-groups"])
         logger.debug( result_raw )
-    except musicbrainzngs.ResponseError:
-        logger.critical("disc not found or bad response")
+    except musicbrainzngs.ResponseError as e:
+        logger.critical("disc not found or bad response: %s"%(e))
         raise Exception
+    except Exception as e:
+        logger.critical("Unknown error attempting to get disc/result id: %s"%(e))
     
     if result_raw.get("disc"):
         r_index='disc'
@@ -163,10 +165,8 @@ def main( args=None ):
         except Exception as e:
             logger.critical( "Error trying to read disc: %s"%(e) )
 
-    if args.disc_number:
-        disc_index = args.disc_number - 1
-    else:
-        disc_index = 0
+    #Default args.disc_number of 0 means this will get set to -1 and tryigger the auto indexer code below
+    disc_index = args.disc_number - 1
 
     try:
         result = get_result(release_id=args.release_id, disc_id=disc_id)
@@ -174,12 +174,25 @@ def main( args=None ):
         logger.critical( "Error trying to get disc/release info from musicbrainz: %s"%(e) )
         raise Exception
 
-    #FIXME: should medium-list be a variable since get_result internally can have it unset ?
+    #Get track from multi disc sets
+    if disc_index < 0:
+        try:
+            result_disc_index = 0
+            for x in result['medium-list']:
+                if x['disc-list'][0]['id'] == disc_id:
+                    disc_index = result_disc_index
+                    break
+                else:
+                    result_disc_index = result_disc_index + 1
+        except Exception as e:
+            logger.critical( "Error trying to get multidisc results: %s"%(e) )
+            sys.exit(1)
+
     try:
         release_id = result['id']
-        release_id_short = release_id.split("-")[disc_index]
+        release_id_short = release_id.split("-")[0]
         release_artist = result['artist-credit-phrase']
-        release_title_raw = result['title']
+        release_title_raw = result['medium-list'][disc_index]['title']
         release_title_clean = clean_string( release_title_raw )
         release_track_list = result['medium-list'][disc_index]['track-list']
         release_disc_number = len(result['medium-list'])
@@ -217,6 +230,7 @@ def main( args=None ):
     cover_art_url =  get_cover_art_url(release_group_id=release_group_id, release_id=release_id, result=result )
     
     #Print out harvested cd info
+    logger.info( "Disc id: %s" %( disc_id ) )
     logger.info( "Release id: %s" %( release_id ) )
     logger.info( "Release id_short: %s" %( release_id_short ) )
     logger.info( "Release group_id: %s" %( release_group_id ) )
@@ -226,6 +240,7 @@ def main( args=None ):
     logger.info( "Release year: %s" %( release_year ) )
     logger.info( "Album Art Url: %s" %( cover_art_url ) )
     logger.debug( "Release release_track_list: %s" %( release_track_list  ) )
+
 
     #Create the temp and dst directory
     wav_dir = "tmp_edcba.%s"%(release_id_short)
@@ -323,7 +338,7 @@ if __name__ == "__main__":
     #Args
     parser = argparse.ArgumentParser(description='CLI Flags or overrides')
     parser.add_argument('-d', '--disc-id', dest='disc_id', help='Override release (cd) id from musicbrainz.', default=None, required=False, type=validate_disc_id)
-    parser.add_argument('-n', '--disc-number', dest='disc_number', help='Choose CD number in album, multi CD albums get one release-id and return N sets of tracks. Default: 1', default=1, required=False, type=validate_disc_number)
+    parser.add_argument('-n', '--disc-number', dest='disc_number', help='Choose CD number in album, multi CD albums get one release-id and return N sets of tracks.', default=0, required=False, type=validate_disc_number)
     parser.add_argument('-r', '--release', dest='release_id', help='Override release (cd) id with a release from musicbrainz.', default=None, required=False, type=validate_release_id)
     parser.add_argument('-g', '--release-group-id', dest='release_group_id', help='Override release (cd) id with a release-group from musicbrainz.', default=None, required=False, type=validate_release_group_id)
     args = parser.parse_args()
