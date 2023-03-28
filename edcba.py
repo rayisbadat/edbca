@@ -192,16 +192,25 @@ def main( args=None ):
         release_id = result['id']
         release_id_short = release_id.split("-")[0]
         release_artist = result['artist-credit-phrase']
-        release_title_raw = result['medium-list'][disc_index]['title']
-        release_title_clean = clean_string( release_title_raw )
         release_track_list = result['medium-list'][disc_index]['track-list']
         release_disc_number = len(result['medium-list'])
-    except KeyError:
-        logger.critical("Couldnt find values")
+    except KeyError as e:
+        logger.critical("Could not find key in release result: %s"%(e))
         raise Exception
     except Exception as e:
         logger.critical(e)
         raise Exception
+
+    try:
+        if "title" in result['medium-list'][disc_index].keys():
+            release_title_raw = result['medium-list'][disc_index]['title']
+        elif "title" in result.keys():
+            release_title_raw = result['title']
+        else:
+            raise Exception
+        release_title_clean = clean_string( release_title_raw )
+    except Exception:
+        logger.critical("Could not title in release result")
 
     try:
         release_date = result['date']
