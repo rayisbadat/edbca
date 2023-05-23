@@ -12,6 +12,9 @@ import discid
 import musicbrainzngs
 import requests
 
+#Cd text
+import cdio, pycdio
+
 #Debug
 from pprint import pprint
 
@@ -151,6 +154,49 @@ def make_rip_dirs(wav_dir, enc_dir):
         logger.critical( "Exception mkdir %s: " %(enc_dir,e) )
         raise Exception
 
+def get_cdtext_tracks():
+    """
+    """
+
+    track_list=[]
+    try:
+        d = cdio.Device(driver_id=pycdio.DRIVER_UNKNOWN)
+        drive_name = d.get_device()
+    except IOError:
+        print("Problem finding a CD-ROM")
+        sys.exit(1)
+    
+    ok, vendor, model, release = d.get_hwinfo()
+    print("drive: %s, vendor: %s, model: %s, release: %s" \
+      % (drive_name, vendor, model, release))
+    
+    # Show CD-Text for an audio CD
+    cdt = d.get_cdtext()
+    i_tracks = d.get_num_tracks()
+    i_first_track = pycdio.get_first_track_num(d.cd)
+  
+    for t in range(i_first_track, i_tracks + i_first_track):
+        for i in range(pycdio.MIN_CDTEXT_FIELD, pycdio.MAX_CDTEXT_FIELDS):
+            value = cdt.get(i, t)
+            # value can be empty but exist, compared to NULL values
+            if value is not None and pycdio.cdtext_field2str(i) == 'TITLE':
+                print("\t%s: %s" % (pycdio.cdtext_field2str(i), value))
+                track_list.append( {'number': str(t), 'position': str(t), 'recording': {'title': str(value) }} )
+                pass
+            pass
+        pass
+
+        track_number = release_track['number'].zfill(2)
+        track_position = release_track['position'].zfill(2)
+        track_title_raw = release_track['recording']['title']
+
+        
+    d.close()
+
+    pprint( track_list )
+    return track_list
+
+
 ###### Main ######
 def main( args=None ):
     """
@@ -188,67 +234,75 @@ def main( args=None ):
             logger.critical( "Error trying to get multidisc results: %s"%(e) )
             sys.exit(1)
 
-    try:
-        release_id = result['id']
-        release_id_short = release_id.split("-")[0]
-        release_artist = result['artist-credit-phrase']
-        release_track_list = result['medium-list'][disc_index]['track-list']
-        release_disc_number = len(result['medium-list'])
-    except KeyError as e:
-        logger.critical("Could not find key in release result: %s"%(e))
-        raise Exception
-    except Exception as e:
-        logger.critical(e)
-        raise Exception
+    if args.do_cdtext_tracks:
+        release_track_list = get_cdtext_tracks()
+        release_title_clean = clean_string( args.title )
+        release_title_clean = clean_string( args.date )
+        release_genre = None
+        release_id_short = release_title_clean
 
-    try:
-        if "title" in result['medium-list'][disc_index].keys():
-            release_title_raw = result['medium-list'][disc_index]['title']
-        elif "title" in result.keys():
-            release_title_raw = result['title']
-        else:
-            raise Exception
-        release_title_clean = clean_string( release_title_raw )
-    except Exception:
-        logger.critical("Could not title in release result")
-
-    try:
-        release_date = result['date']
-        release_year = release_date.split("-")[0]
-    except:
-        release_date = '0000-00-00'
-        release_year = release_date.split("-")[0]
-
-    if args.release_group_id:
-        release_group_id = args.release_group_id
-        logger.info("release id: %s" % disc_id)
     else:
         try:
-            release_group_id = result['release-group']['id']
-        except:
-            logger.warning("could not determine release-group id")
-            release_group_id = none
-
-    #Genre not always there
-    try:
-        release_genre = result['genre']
-    except:
-        release_genre = None
-
-    #Get the cover art url if possible
-    cover_art_url =  get_cover_art_url(release_group_id=release_group_id, release_id=release_id, result=result )
+            release_id = result['id']
+            release_id_short = release_id.split("-")[0]
+            release_artist = result['artist-credit-phrase']
+            release_track_list = result['medium-list'][disc_index]['track-list']
+            release_disc_number = len(result['medium-list'])
+        except KeyError as e:
+            logger.critical("Could not find key in release result: %s"%(e))
+            raise Exception
+        except Exception as e:
+            logger.critical(e)
+            raise Exception
     
-    #Print out harvested cd info
-    logger.info( "Disc id: %s" %( disc_id ) )
-    logger.info( "Release id: %s" %( release_id ) )
-    logger.info( "Release id_short: %s" %( release_id_short ) )
-    logger.info( "Release group_id: %s" %( release_group_id ) )
-    logger.info( "Release artist: %s" %( release_artist ) )
-    logger.info( "Release title: %s" %( release_title_clean ) )
-    logger.info( "Release date: %s" %( release_date ) )
-    logger.info( "Release year: %s" %( release_year ) )
-    logger.info( "Album Art Url: %s" %( cover_art_url ) )
-    logger.debug( "Release release_track_list: %s" %( release_track_list  ) )
+        try:
+            if "title" in result['medium-list'][disc_index].keys():
+                release_title_raw = result['medium-list'][disc_index]['title']
+            elif "title" in result.keys():
+                release_title_raw = result['title']
+            else:
+                raise Exception
+            release_title_clean = clean_string( release_title_raw )
+        except Exception:
+            logger.critical("Could not title in release result")
+    
+        try:
+            release_date = result['date']
+            release_year = release_date.split("-")[0]
+        except:
+            release_date = '0000-00-00'
+            release_year = release_date.split("-")[0]
+    
+        if args.release_group_id:
+            release_group_id = args.release_group_id
+            logger.info("release id: %s" % disc_id)
+        else:
+            try:
+                release_group_id = result['release-group']['id']
+            except:
+                logger.warning("could not determine release-group id")
+                release_group_id = none
+    
+        #Genre not always there
+        try:
+            release_genre = result['genre']
+        except:
+            release_genre = None
+    
+        #Get the cover art url if possible
+        cover_art_url =  get_cover_art_url(release_group_id=release_group_id, release_id=release_id, result=result )
+        
+        #Print out harvested cd info
+        logger.info( "Disc id: %s" %( disc_id ) )
+        logger.info( "Release id: %s" %( release_id ) )
+        logger.info( "Release id_short: %s" %( release_id_short ) )
+        logger.info( "Release group_id: %s" %( release_group_id ) )
+        logger.info( "Release artist: %s" %( release_artist ) )
+        logger.info( "Release title: %s" %( release_title_clean ) )
+        logger.info( "Release date: %s" %( release_date ) )
+        logger.info( "Release year: %s" %( release_year ) )
+        logger.info( "Album Art Url: %s" %( cover_art_url ) )
+        logger.debug( "Release release_track_list: %s" %( release_track_list  ) )
 
 
     #Create the temp and dst directory
@@ -350,7 +404,11 @@ if __name__ == "__main__":
     parser.add_argument('-n', '--disc-number', dest='disc_number', help='Choose CD number in album, multi CD albums get one release-id and return N sets of tracks.', default=0, required=False, type=validate_disc_number)
     parser.add_argument('-r', '--release', dest='release_id', help='Override release (cd) id with a release from musicbrainz.', default=None, required=False, type=validate_release_id)
     parser.add_argument('-g', '--release-group-id', dest='release_group_id', help='Override release (cd) id with a release-group from musicbrainz.', default=None, required=False, type=validate_release_group_id)
+    parser.add_argument('-c', '--use-cdtext-tracks', dest='do_cdtext_tracks', help='Pull cdtext from cdtext instead of musicbrains', required=False, action='store_true')
+    parser.add_argument('-a', '--album', dest='album_override', help='Override the album name.', default=None, required=False, type=str)
+    parser.add_argument('-s', '--artist', dest='band_override', help='Override the artist name.', default=None, required=False, type=str)
     args = parser.parse_args()
+
 
     try: 
         main(args=args)
