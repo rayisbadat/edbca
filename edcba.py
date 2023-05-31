@@ -34,107 +34,14 @@ encoder='oggenc'
 #Set useragent needed by musicbrainz db
 musicbrainzngs.set_useragent("edcba cd ripper", "0.1", "")
 
-def clean_string( string_value):
+def clean_string( string_value ):
     """
     Cleans up strings to make safe for writing to filesystem
     """
-
     #Inverse match, so we sub out anything not in regex
     regex="[^a-zA-z0-9()]+"
     regexed_string = re.sub(regex, "_", string_value)
     return regexed_string.rstrip("_")
-
-def validate_disc_id( disc_id ):
-  if disc_id:
-    return disc_id
-  raise ValueError
-
-def validate_disc_number( disc_number ):
-  try:
-    return int( disc_number)
-  except:
-    raise ValueError
-
-def validate_release_id( release_id ):
-  if release_id:
-    return release_id
-  raise ValueError
-
-def validate_release_group_id( release_group_id ):
-  if release_group_id:
-    return release_group_id
-  raise ValueError   
-
-def get_result(release_id=None, disc_id=None):
-    """
-    """
-    try:
-        if release_id:
-            result_raw = musicbrainzngs.get_release_by_id(args.release_id,includes=["artists", "recordings", "release-groups"])
-        else:
-            result_raw = musicbrainzngs.get_releases_by_discid(disc_id,includes=["artists", "recordings", "release-groups"])
-        logger.debug( result_raw )
-    except musicbrainzngs.ResponseError as e:
-        logger.critical("disc not found or bad response: %s"%(e))
-        raise Exception
-    except Exception as e:
-        logger.critical("Unknown error attempting to get disc/result id: %s"%(e))
-    
-    if result_raw.get("disc"):
-        r_index='disc'
-        s_index='release-list'
-        result=result_raw[r_index][s_index][0]
-    elif result_raw.get("cdstub"):
-        r_index='cdstub'
-        s_index='release-list'
-        result=result_raw[r_index][s_index][0]
-    elif result_raw.get("release"):
-        r_index='release'
-        s_index='medium-list'
-        result=result_raw[r_index]
-    else:
-        logger.critical("couldnt get disc or cdstub key index")
-        raise Exception
-    return result
-
-def get_cover_art_url(release_group_id=None, release_id=None, result=None):
-    """
-    """
-
-    #If we were given a release group extract album art list
-    cover_art_list=None
-
-    # Try to pull album art from release and if not try release-group
-    if not cover_art_list:
-        try:
-            cover_art_list = musicbrainzngs.get_image_list( release_id )
-        except:
-            cover_art_list=None
-            logger.debug("Could not pull image list from release group id: %s"%( release_group_id ) )
-
-    if not cover_art_list:
-        if release_group_id:
-            try:
-                cover_art_list=musicbrainzngs.get_release_group_image_list( release_group_id )
-            except:
-                cover_art_list=None
-                logger.debug("Could not pull image list from release group id: %s"%( release_group_id ) )
-
-    if cover_art_list:
-        try:
-            cover_art_url = cover_art_list['images'][0]['image']
-        except KeyError as e:
-            logger.warning( "Couldnt extract cover_art_list URL: %s"%(e) )
-            cover_art_url = None
-            #raise Exception
-        except Exception as e:
-            logger.warning( "Couldnt extract cover_art_list URL: %s"%(e) )
-            #raise Exception
-    else:
-        logger.warning( "could not determine cover_art_url, there might not be any")
-        cover_art_url = None
-
-    return cover_art_url
 
 def make_rip_dirs(wav_dir, enc_dir):
     """
@@ -154,170 +61,273 @@ def make_rip_dirs(wav_dir, enc_dir):
         logger.critical( "Exception mkdir %s: " %(enc_dir,e) )
         raise Exception
 
-def get_from_cdtext():
-    """
-    """
+def validate_disc_id(self, disc_id ):
+  if disc_id:
+    return disc_id
+  raise ValueError
 
-    track_list=[]
-    try:
-        d = cdio.Device(driver_id=pycdio.DRIVER_UNKNOWN)
-        drive_name = d.get_device()
-    except IOError:
-        print("Problem finding a CD-ROM")
-        sys.exit(1)
+def validate_disc_number(self, disc_number ):
+  try:
+    return int( disc_number )
+  except:
+    raise ValueError
+
+def validate_release_id( release_id ):
+  if release_id:
+    return release_id
+  raise ValueError
+
+def validate_release_group_id( release_group_id ):
+  if release_group_id:
+    return release_group_id
+  raise ValueError   
+
+class Edcba:
+    """
+    """
+    def __init__(self, args):
+        self.moo = "cow"
+        self.args = args
+
+        #Values for cd
+        self.cover_art_url = None
+        self.disc_id = None
+        self.disc_index = None
+        self.release_id = None
+
+    def get_result(self):
+        """
+        """
+        try:
+            if self.release_id:
+                result_raw = musicbrainzngs.get_release_by_id(self.release_id,includes=["artists", "recordings", "release-groups"])
+            else:
+                result_raw = musicbrainzngs.get_releases_by_discid(self.disc_id,includes=["artists", "recordings", "release-groups"])
+            logger.debug( result_raw )
+        except musicbrainzngs.ResponseError as e:
+            logger.critical("disc not found or bad response: %s"%(e))
+            raise Exception
+        except Exception as e:
+            logger.critical("Unknown error attempting to get disc/result id: %s"%(e))
+        
+        if result_raw.get("disc"):
+            r_index='disc'
+            s_index='release-list'
+            result=result_raw[r_index][s_index][0]
+        elif result_raw.get("cdstub"):
+            r_index='cdstub'
+            s_index='release-list'
+            result=result_raw[r_index][s_index][0]
+        elif result_raw.get("release"):
+            r_index='release'
+            s_index='medium-list'
+            result=result_raw[r_index]
+        else:
+            logger.critical("couldnt get disc or cdstub key index")
+            raise Exception
+        return result
     
-    ok, vendor, model, release = d.get_hwinfo()
-    print("drive: %s, vendor: %s, model: %s, release: %s" \
-      % (drive_name, vendor, model, release))
+    def get_cover_art_url(self):
+        """
+        """
+        #If we were given a release group extract album art list
+        cover_art_list=None
     
-    # Show CD-Text for an audio CD
-    cdt = d.get_cdtext()
-    i_tracks = d.get_num_tracks()
-    i_first_track = pycdio.get_first_track_num(d.cd)
-  
-    for t in range(i_first_track, i_tracks + i_first_track):
-        for i in range(pycdio.MIN_CDTEXT_FIELD, pycdio.MAX_CDTEXT_FIELDS):
-            value = cdt.get(i, t)
-            # value can be empty but exist, compared to NULL values
-            if value is not None and pycdio.cdtext_field2str(i) == 'TITLE':
-                print("\t%s: %s" % (pycdio.cdtext_field2str(i), value))
-                track_list.append( {'number': str(t), 'position': str(t), 'recording': {'title': str(value) }} )
+        # Try to pull album art from release and if not try release-group
+        if self.release_id:
+            try:
+                cover_art_list = musicbrainzngs.get_image_list( self.release_id )
+            except:
+                cover_art_list=None
+                logger.debug("Could not pull image list from release group id: %s"%( release_group_id ) )
+        elif self.release_group_id:
+            try:
+                cover_art_list=musicbrainzngs.get_release_group_image_list( release_group_id )
+            except:
+                cover_art_list=None
+                logger.debug("Could not pull image list from release group id: %s"%( release_group_id ) )
+
+        if cover_art_list:
+            try:
+                self.cover_art_url = cover_art_list['images'][0]['image']
+            except KeyError as e:
+                logger.warning( "Couldnt extract cover_art_list URL: %s"%(e) )
+                self.cover_art_url = None
+                #raise Exception
+            except Exception as e:
+                logger.warning( "Couldnt extract cover_art_list URL: %s"%(e) )
+                #raise Exception
+        else:
+            logger.warning( "could not determine cover_art_url, there might not be any")
+            self.cover_art_url = None
+    
+    def get_from_cdtext(self):
+        """
+        """
+    
+        track_list=[]
+        try:
+            d = cdio.Device(driver_id=pycdio.DRIVER_UNKNOWN)
+            drive_name = d.get_device()
+        except IOError:
+            print("Problem finding a CD-ROM")
+            sys.exit(1)
+        
+        ok, vendor, model, release = d.get_hwinfo()
+        print("drive: %s, vendor: %s, model: %s, release: %s" \
+          % (drive_name, vendor, model, release))
+        
+        # Show CD-Text for an audio CD
+        cdt = d.get_cdtext()
+        i_tracks = d.get_num_tracks()
+        i_first_track = pycdio.get_first_track_num(d.cd)
+      
+        for t in range(i_first_track, i_tracks + i_first_track):
+            for i in range(pycdio.MIN_CDTEXT_FIELD, pycdio.MAX_CDTEXT_FIELDS):
+                value = cdt.get(i, t)
+                # value can be empty but exist, compared to NULL values
+                if value is not None and pycdio.cdtext_field2str(i) == 'TITLE':
+                    print("\t%s: %s" % (pycdio.cdtext_field2str(i), value))
+                    track_list.append( {'number': str(t), 'position': str(t), 'recording': {'title': str(value) }} )
+                    pass
                 pass
             pass
-        pass
-
-        track_number = release_track['number'].zfill(2)
-        track_position = release_track['position'].zfill(2)
-        track_title_raw = release_track['recording']['title']
-
-        
-    d.close()
-
-    pprint( track_list )
-    return track_list
-
-def get_from_musicbrainz(args):
-    """
-    """
-    if args.disc_id:
-        disc_id = args.disc_id
-    else:
-        try: 
-            disc = discid.read()  # use default device
-            disc_id = disc.id
-        except Exception as e:
-            logger.critical( "Error trying to read disc: %s"%(e) )
-
-    try:
-        result = get_result(release_id=args.release_id, disc_id=disc_id)
-    except Exception as e:
-        logger.critical( "Error trying to get disc/release info from musicbrainz: %s"%(e) )
-        raise Exception
-
-
-###### Main ######
-def main( args=None ):
-    """
-    """
-
-    if args.do_cdtext_tracks:
-        result = get_from_cdtext( args )
-    else:
-        result = get_from_musicbrainz( args )
-        
-    #Default args.disc_number of 0 means this will get set to -1 and tryigger the auto indexer code below
-    disc_index = args.disc_number - 1
-
-    #Get track from multi disc sets
-    if disc_index < 0:
+    
+            track_number = release_track['number'].zfill(2)
+            track_position = release_track['position'].zfill(2)
+            track_title_raw = release_track['recording']['title']
+    
+            
+        d.close()
+    
+        pprint( track_list )
+        if self.args.do_cdtext_tracks:
+            self.release_track_list = get_cdtext_tracks()
+            self.release_title_clean = clean_string( self.args.title )
+            self.release_title_clean = clean_string( self.args.date )
+            self.release_genre = None
+            self.release_id_short = self.release_title_clean
+    
+    
+    def get_from_musicbrainz(self):
+        """
+        """
+        if self.args.disc_id:
+            self.disc_id = args.disc_id
+        else:
+            try: 
+                disc = discid.read()  # use default device
+                self.disc_id = disc.id
+            except Exception as e:
+                logger.critical( "Error trying to read disc: %s"%(e) )
+    
         try:
-            result_disc_index = 0
-            for x in result['medium-list']:
-                if x['disc-list'][0]['id'] == disc_id:
-                    disc_index = result_disc_index
-                    break
-                else:
-                    result_disc_index = result_disc_index + 1
+            result = self.get_result()
         except Exception as e:
-            logger.critical( "Error trying to get multidisc results: %s"%(e) )
-            sys.exit(1)
-
-    if args.do_cdtext_tracks:
-        release_track_list = get_cdtext_tracks()
-        release_title_clean = clean_string( args.title )
-        release_title_clean = clean_string( args.date )
-        release_genre = None
-        release_id_short = release_title_clean
-
-    else:
+            logger.critical( "Error trying to get disc/release info from musicbrainz: %s"%(e) )
+            raise Exception
+    
+        #Default args.disc_number of 0 means this will get set to -1 and tryigger the auto indexer code below
+        self.disc_index = self.args.disc_number - 1
+    
+        #Get track from multi disc sets
+        if self.disc_index < 0:
+            try:
+                result_disc_index = 0
+                for x in result['medium-list']:
+                    if x['disc-list'][0]['id'] == self.disc_id:
+                        self.disc_index = result_disc_index
+                        break
+                    else:
+                        result_disc_index = result_disc_index + 1
+            except Exception as e:
+                logger.critical( "Error trying to get multidisc results: %s"%(e) )
+                sys.exit(1)
+    
         try:
-            release_id = result['id']
-            release_id_short = release_id.split("-")[0]
-            release_artist = result['artist-credit-phrase']
-            release_track_list = result['medium-list'][disc_index]['track-list']
-            release_disc_number = len(result['medium-list'])
+            self.release_id = result['id']
+            self.release_id_short = self.release_id.split("-")[0]
+            self.release_artist = result['artist-credit-phrase']
+            self.release_track_list = result['medium-list'][self.disc_index]['track-list']
+            self.release_disc_number = len(result['medium-list'])
         except KeyError as e:
             logger.critical("Could not find key in release result: %s"%(e))
             raise Exception
         except Exception as e:
             logger.critical(e)
             raise Exception
-    
+
+        pprint( result['medium-list'][self.disc_index] )
         try:
-            if "title" in result['medium-list'][disc_index].keys():
-                release_title_raw = result['medium-list'][disc_index]['title']
+            if "title" in result['medium-list'][self.disc_index].keys():
+                self.release_title_raw = result['medium-list'][self.disc_index]['title']
             elif "title" in result.keys():
-                release_title_raw = result['title']
+                self.release_title_raw = result['title']
             else:
                 raise Exception
-            release_title_clean = clean_string( release_title_raw )
+            self.release_title_clean = clean_string( self.release_title_raw )
         except Exception:
             logger.critical("Could not title in release result")
     
         try:
-            release_date = result['date']
-            release_year = release_date.split("-")[0]
+            self.release_date = result['date']
+            self.release_year = self.release_date.split("-")[0]
         except:
-            release_date = '0000-00-00'
-            release_year = release_date.split("-")[0]
+            self.release_date = '0000-00-00'
+            self.release_year = self.release_date.split("-")[0]
     
-        if args.release_group_id:
-            release_group_id = args.release_group_id
-            logger.info("release id: %s" % disc_id)
+        if self.args.release_group_id:
+            self.release_group_id = args.release_group_id
+            logger.info("release id: %s" % (self.disc_id) )
         else:
             try:
-                release_group_id = result['release-group']['id']
+                self.release_group_id = result['release-group']['id']
             except:
                 logger.warning("could not determine release-group id")
-                release_group_id = none
+                self.release_group_id = none
     
         #Genre not always there
         try:
-            release_genre = result['genre']
+            self.release_genre = result['genre']
         except:
-            release_genre = None
+            self.release_genre = None
     
         #Get the cover art url if possible
-        cover_art_url =  get_cover_art_url(release_group_id=release_group_id, release_id=release_id, result=result )
+        self.cover_art_url =  self.get_cover_art_url()
+    
+
+###### Main ######
+def main( args=None ):
+    """
+    """
+    pprint( "1" )
+    edcba = Edcba(args)
+    pprint( "2" )
+
+    if args.do_cdtext_tracks:
+        result = edcba.get_from_cdtext()
+    else:
+        result = edcba.get_from_musicbrainz()
         
-        #Print out harvested cd info
-        logger.info( "Disc id: %s" %( disc_id ) )
-        logger.info( "Release id: %s" %( release_id ) )
-        logger.info( "Release id_short: %s" %( release_id_short ) )
-        logger.info( "Release group_id: %s" %( release_group_id ) )
-        logger.info( "Release artist: %s" %( release_artist ) )
-        logger.info( "Release title: %s" %( release_title_clean ) )
-        logger.info( "Release date: %s" %( release_date ) )
-        logger.info( "Release year: %s" %( release_year ) )
-        logger.info( "Album Art Url: %s" %( cover_art_url ) )
-        logger.debug( "Release release_track_list: %s" %( release_track_list  ) )
+    pprint( result )
+    #Print out harvested cd info
+    logger.info( "Disc id: %s" %( edcba.disc_id ) )
+    logger.info( "Release id: %s" %( edcba.release_id ) )
+    logger.info( "Release id_short: %s" %( edcba.release_id_short ) )
+    logger.info( "Release group_id: %s" %( edcba.release_group_id ) )
+    logger.info( "Release artist: %s" %( edcba.release_artist ) )
+    logger.info( "Release title: %s" %( edcba.release_title_clean ) )
+    logger.info( "Release date: %s" %( edcba.release_date ) )
+    logger.info( "Release year: %s" %( edcba.release_year ) )
+    logger.info( "Album Art Url: %s" %( edcba.cover_art_url ) )
+    logger.debug( "Release release_track_list: %s" %( edcba.release_track_list  ) )
 
 
     #Create the temp and dst directory
-    wav_dir = "tmp_edcba.%s"%(release_id_short)
-    enc_dir = "%s_%s"%(release_year,release_title_clean)
-    if release_disc_number > 1:
-        enc_dir = "%s_CD%s"%( enc_dir, disc_index+1)
+    wav_dir = "tmp_edcba.%s"%(edcba.release_id_short)
+    enc_dir = "%s_%s"%(edcba.release_year,edcba.release_title_clean)
+    if edcba.release_disc_number > 1:
+        enc_dir = "%s_CD%s"%( enc_dir, edcba.disc_index+1)
     album_art_file = "%s/cover.jpg"%(enc_dir)
 
     #Make rip directories
@@ -328,10 +338,10 @@ def main( args=None ):
         exit( 1 )
 
     #Try to download album art
-    if cover_art_url:
+    if edcba.cover_art_url:
       try:
-          r = requests.get(cover_art_url, stream=True)
-          logger.debug( "Successfully downloaded %s"%(cover_art_url))
+          r = requests.get(edcba.cover_art_url, stream=True)
+          logger.debug( "Successfully downloaded %s"%(edcba.cover_art_url))
       except requests.exceptions as e:
           logger.critical( "Failed to download album art: %s"%(e) )
           raise Exception
@@ -339,13 +349,13 @@ def main( args=None ):
           with open(album_art_file, 'wb') as fd:
               for chunk in r.iter_content(chunk_size=128):
                   fd.write(chunk)
-          logger.info( "Successfully wrote album art from %s to %s ."%(cover_art_url,album_art_file))
+          logger.info( "Successfully wrote album art from %s to %s ."%(edcba.cover_art_url,album_art_file))
       except Exception as e:
           logger.critical( "Failed to write album art to %s: %s"%(album_art_file,e) )
           raise Exception
 
     # Rip and encode each track
-    for release_track in release_track_list:
+    for release_track in edcba.release_track_list:
         # Do I need position or number
         track_number = release_track['number'].zfill(2)
         track_position = release_track['position'].zfill(2)
@@ -357,27 +367,27 @@ def main( args=None ):
 
         #FIXME: Hardcoded to oggenc 
         #FIXME: change the --artist to the track artist from musicbrainz
-        logger.debug( '%s: %s'%( 'release_artist', release_artist ))
-        logger.debug( '%s: %s'%( 'release_title_raw', release_title_raw ))
-        logger.debug( '%s: %s'%( 'release_title_clean', release_title_clean ))
+        logger.debug( '%s: %s'%( 'release_artist', edcba.release_artist ))
+        logger.debug( '%s: %s'%( 'release_title_raw', edcba.release_title_raw ))
+        logger.debug( '%s: %s'%( 'release_title_clean', edcba.release_title_clean ))
         logger.debug( '%s: %s'%( 'track_title_clean', track_title_clean ))
         logger.debug( '%s: %s'%( 'track_title_raw', track_title_raw ))
-        logger.debug( '%s: %s'%( 'release_date', release_date ))
+        logger.debug( '%s: %s'%( 'release_date', edcba.release_date ))
         logger.debug( '%s: %s'%( 'track_number', track_number ))
-        logger.debug( '%s: %s'%( 'release_artist', release_artist ))
-        logger.debug( '%s: %s'%( 'release_id_short', release_id_short ))
-        logger.debug( '%s: %s'%( 'release_disc_number', release_disc_number ))
+        logger.debug( '%s: %s'%( 'release_artist', edcba.release_artist ))
+        logger.debug( '%s: %s'%( 'release_id_short', edcba.release_id_short ))
+        logger.debug( '%s: %s'%( 'release_disc_number', edcba.release_disc_number ))
 
         tag_flags = '--artist "%s" --album "%s" --title "%s" --date "%s" --tracknum "%s" --comment "albumartist=%s" --comment "CDDB=%s"'%(
-            release_artist,
-            release_title_raw,
+            edcba.release_artist,
+            edcba.release_title_raw,
             track_title_raw,
-            release_date,
+            edcba.release_date,
             track_number,
-            release_artist,
-            release_id_short,
+            edcba.release_artist,
+            edcba.release_id_short,
         )
-        if release_genre:
+        if edcba.release_genre:
             tag_flags += ' --genre "%s"'
 
         logger.debug( '%s: %s'%( 'tag_flags', tag_flags ))
@@ -421,4 +431,5 @@ if __name__ == "__main__":
     try: 
         main(args=args)
     except Exception as e:
+        pprint( "Failed in main: %s"%(e))
         exit( 1 ) 
