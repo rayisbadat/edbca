@@ -154,7 +154,7 @@ def make_rip_dirs(wav_dir, enc_dir):
         logger.critical( "Exception mkdir %s: " %(enc_dir,e) )
         raise Exception
 
-def get_cdtext_tracks():
+def get_from_cdtext():
     """
     """
 
@@ -196,12 +196,9 @@ def get_cdtext_tracks():
     pprint( track_list )
     return track_list
 
-
-###### Main ######
-def main( args=None ):
+def get_from_musicbrainz(args):
     """
     """
-
     if args.disc_id:
         disc_id = args.disc_id
     else:
@@ -211,14 +208,25 @@ def main( args=None ):
         except Exception as e:
             logger.critical( "Error trying to read disc: %s"%(e) )
 
-    #Default args.disc_number of 0 means this will get set to -1 and tryigger the auto indexer code below
-    disc_index = args.disc_number - 1
-
     try:
         result = get_result(release_id=args.release_id, disc_id=disc_id)
     except Exception as e:
         logger.critical( "Error trying to get disc/release info from musicbrainz: %s"%(e) )
         raise Exception
+
+
+###### Main ######
+def main( args=None ):
+    """
+    """
+
+    if args.do_cdtext_tracks:
+        result = get_from_cdtext( args )
+    else:
+        result = get_from_musicbrainz( args )
+        
+    #Default args.disc_number of 0 means this will get set to -1 and tryigger the auto indexer code below
+    disc_index = args.disc_number - 1
 
     #Get track from multi disc sets
     if disc_index < 0:
