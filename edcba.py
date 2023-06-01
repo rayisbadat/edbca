@@ -61,12 +61,12 @@ def make_rip_dirs(wav_dir, enc_dir):
         logger.critical( "Exception mkdir %s: " %(enc_dir,e) )
         raise Exception
 
-def validate_disc_id(self, disc_id ):
+def validate_disc_id(disc_id ):
   if disc_id:
     return disc_id
   raise ValueError
 
-def validate_disc_number(self, disc_number ):
+def validate_disc_number(disc_number ):
   try:
     return int( disc_number )
   except:
@@ -93,7 +93,19 @@ class Edcba:
         self.cover_art_url = None
         self.disc_id = None
         self.disc_index = None
+        self.release_track_list = []
+
+        self.release_title_raw = None
+        self.release_title_clean = None
         self.release_id = None
+        self.release_id_short = None
+        self.release_artist = None
+        self.release_group_id = None
+        self.release_date = None
+        self.release_year = None
+        self.release_disc_number = None
+        self.release_genre = None
+
 
     def get_result(self):
         """
@@ -165,7 +177,6 @@ class Edcba:
         """
         """
     
-        track_list=[]
         try:
             d = cdio.Device(driver_id=pycdio.DRIVER_UNKNOWN)
             drive_name = d.get_device()
@@ -174,39 +185,35 @@ class Edcba:
             sys.exit(1)
         
         ok, vendor, model, release = d.get_hwinfo()
-        print("drive: %s, vendor: %s, model: %s, release: %s" \
-          % (drive_name, vendor, model, release))
+        print("drive: %s, vendor: %s, model: %s, release: %s" % (drive_name, vendor, model, release))
         
         # Show CD-Text for an audio CD
         cdt = d.get_cdtext()
         i_tracks = d.get_num_tracks()
         i_first_track = pycdio.get_first_track_num(d.cd)
-      
         for t in range(i_first_track, i_tracks + i_first_track):
             for i in range(pycdio.MIN_CDTEXT_FIELD, pycdio.MAX_CDTEXT_FIELDS):
                 value = cdt.get(i, t)
                 # value can be empty but exist, compared to NULL values
                 if value is not None and pycdio.cdtext_field2str(i) == 'TITLE':
                     print("\t%s: %s" % (pycdio.cdtext_field2str(i), value))
-                    track_list.append( {'number': str(t), 'position': str(t), 'recording': {'title': str(value) }} )
+                    self.release_track_list.append( {'number': str(t), 'position': str(t), 'recording': {'title': str(value) }} )
                     pass
                 pass
             pass
-    
-            track_number = release_track['number'].zfill(2)
-            track_position = release_track['position'].zfill(2)
-            track_title_raw = release_track['recording']['title']
-    
-            
         d.close()
     
-        pprint( track_list )
-        if self.args.do_cdtext_tracks:
-            self.release_track_list = get_cdtext_tracks()
-            self.release_title_clean = clean_string( self.args.title )
-            self.release_title_clean = clean_string( self.args.date )
-            self.release_genre = None
-            self.release_id_short = self.release_title_clean
+        self.release_title_raw = self.args.album
+        self.release_title_clean = clean_string( self.release_title_raw )
+        self.release_id = self.release_title_clean
+        self.release_id_short = self.release_title_clean
+        self.release_artist = clean_string( self.args.artist )
+        self.release_group_id = self.release_artist
+        self.release_date = clean_string( self.args.year )
+        self.release_year = self.release_date.split("-")[0]
+        self.release_disc_number = self.args.disc_number
+        self.release_genre = None
+
     
     
     def get_from_musicbrainz(self):
@@ -221,6 +228,12 @@ class Edcba:
             except Exception as e:
                 logger.critical( "Error trying to read disc: %s"%(e) )
     
+        if self.args.release_id:
+            self.release_id = self.args.release_id
+
+        if self.args.release_group_id:
+            self.release_id = self.args.release_group_id
+
         try:
             result = self.get_result()
         except Exception as e:
@@ -257,7 +270,6 @@ class Edcba:
             logger.critical(e)
             raise Exception
 
-        pprint( result['medium-list'][self.disc_index] )
         try:
             if "title" in result['medium-list'][self.disc_index].keys():
                 self.release_title_raw = result['medium-list'][self.disc_index]['title']
@@ -300,16 +312,13 @@ class Edcba:
 def main( args=None ):
     """
     """
-    pprint( "1" )
     edcba = Edcba(args)
-    pprint( "2" )
 
     if args.do_cdtext_tracks:
         result = edcba.get_from_cdtext()
     else:
         result = edcba.get_from_musicbrainz()
         
-    pprint( result )
     #Print out harvested cd info
     logger.info( "Disc id: %s" %( edcba.disc_id ) )
     logger.info( "Release id: %s" %( edcba.release_id ) )
@@ -423,13 +432,13 @@ if __name__ == "__main__":
     parser.add_argument('-r', '--release', dest='release_id', help='Override release (cd) id with a release from musicbrainz.', default=None, required=False, type=validate_release_id)
     parser.add_argument('-g', '--release-group-id', dest='release_group_id', help='Override release (cd) id with a release-group from musicbrainz.', default=None, required=False, type=validate_release_group_id)
     parser.add_argument('-c', '--use-cdtext-tracks', dest='do_cdtext_tracks', help='Pull cdtext from cdtext instead of musicbrains', required=False, action='store_true')
-    parser.add_argument('-a', '--album', dest='album_override', help='Override the album name.', default=None, required=False, type=str)
-    parser.add_argument('-s', '--artist', dest='band_override', help='Override the artist name.', default=None, required=False, type=str)
+    parser.add_argument('-a', '--album', dest='album', help='Override the album name.', default=None, required=False, type=str)
+    parser.add_argument('-s', '--artist', dest='artist', help='Override the artist name.', default=None, required=False, type=str)
+    parser.add_argument('-y', '--year', dest='year', help='Override the release year.', default=None, required=False, type=str)
     args = parser.parse_args()
-
 
     try: 
         main(args=args)
     except Exception as e:
-        pprint( "Failed in main: %s"%(e))
+        logger.critical( "Failed in main: %s"%(e))
         exit( 1 ) 
