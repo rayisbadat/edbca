@@ -176,16 +176,12 @@ class Edcba:
     def get_from_cdtext(self):
         """
         """
-    
         try:
             d = cdio.Device(driver_id=pycdio.DRIVER_UNKNOWN)
             drive_name = d.get_device()
         except IOError:
-            print("Problem finding a CD-ROM")
+            logger.critical("Problem finding a CD-ROM")
             sys.exit(1)
-        
-        ok, vendor, model, release = d.get_hwinfo()
-        print("drive: %s, vendor: %s, model: %s, release: %s" % (drive_name, vendor, model, release))
         
         # Show CD-Text for an audio CD
         cdt = d.get_cdtext()
@@ -214,8 +210,6 @@ class Edcba:
         self.release_disc_number = self.args.disc_number
         self.release_genre = None
 
-    
-    
     def get_from_musicbrainz(self):
         """
         """
@@ -344,7 +338,7 @@ def main( args=None ):
         make_rip_dirs(wav_dir=wav_dir, enc_dir=enc_dir)
     except Exception as e:
         logger.critical( "Couldnt mkdirs : %s"%(e) )
-        exit( 1 )
+        raise Exception
 
     #Try to download album art
     if edcba.cover_art_url:
@@ -418,12 +412,12 @@ def main( args=None ):
         except subprocess.CalledProcessError:
             logger.critical( 'encoder failed' )
             raise Exception
-    
+
   
 if __name__ == "__main__":
 
     #Set up logging
-    funcName = __name__
+    #funcName = __name__
 
     #Args
     parser = argparse.ArgumentParser(description='CLI Flags or overrides')
