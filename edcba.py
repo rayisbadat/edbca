@@ -15,6 +15,9 @@ import requests
 #Cd text
 import cdio, pycdio
 
+#uuid validation
+from uuid import UUID
+
 #Debug
 from pprint import pprint
 
@@ -61,92 +64,49 @@ def make_rip_dirs(wav_dir, enc_dir):
         logger.critical( "Exception mkdir %s: " %(enc_dir,e) )
         raise Exception
 
-def validate_disc_id(disc_id ):
+def validate_disc_id( disc_id ):
   if disc_id:
     return disc_id
   raise ValueError
 
-def validate_disc_number(disc_number ):
+def validate_disc_number( disc_number ):
   try:
     return int( disc_number )
   except:
     raise ValueError
 
-def validate_release_id( release_id ):
-  if release_id:
-    return release_id
-  raise ValueError
-
-def validate_release_group_id( release_group_id ):
-  if release_group_id:
-    return release_group_id
-  raise ValueError   
+def validate_uuid( uuid_arg ):
+  try:
+    uuid_var = UUID(uuid_arg)
+    print( "validate_uuid: %s %s"%(uuid_arg,str(uuid_var)))
+    return str(uuid_var)
+  except ValueError:
+    raise ValueError
 
 class Edcba:
     """
     """
     def __init__(self, args):
-        #self.args = args
-        funcName = sys._getframe(1).f_code.co_name
-        pprint( funcName )
-
-        #Set default values to None
-        self.cover_art_url = None
-        self.disc_index = None
-        self.release_track_list = []
-        self.release_title_raw = None
-        self.release_title_clean = None
-
-        #Set overrides we set via cmd line flags
-        if args.disc_id:
-            self.disc_id = args.disc_id
-        else:
-            self.disc_id = None
-        if args.release_id:
-            self.release_id = args.release_id
-            self.release_id_short = self.release_id.split("-")[0]
-        else:
-            self.release_id = None
-            self.release_id_short = None
-
-        if args.release_artist:
-            self.release_artist = args.release_artist
-        else:
-            self.release_artist = None
-
-        if args.release_album:
-            self.release_album = args.release_album
-        else:
-            self.release_album = None
-
-        if args.release_group_id:
-            self.release_group_id = args.release_group_id
-        else:
-            self.release_group_id = None
-
-        if args.release_date:
-            self.release_date = args.release_date
-        else:
-            self.release_date = None
-
-        if args.release_year:
-            self.release_year = args.release_year
-        elif args.release_date:
-            self.release_year = self.release_date.split("-")[0]
-        else:
-            self.release_year = None
-
+        """
+        """
+        # Copy in the cli arguments
+        self.disc_id = args.disc_id
         self.release_disc_number = args.release_disc_number
+        self.release_id = args.release_id
+        self.release_group_id = args.release_group_id
+        self.release_album = args.release_album
+        self.release_artist = args.release_artist
+        self.release_year = args.release_year
+        self.release_date = args.release_date
         self.release_genre = args.release_genre
-        pprint( "1")
 
+        #Set None/[] variables needed later
+        self.release_track_list = []
+        self.cover_art_url = None
 
     def get_musicbrainz_results(self):
         """
         """
-        funcName = sys._getframe(1).f_code.co_name
-        pprint( funcName )
-
         try:
             if self.release_id:
                 result_raw = musicbrainzngs.get_release_by_id(self.release_id,includes=["artists", "recordings", "release-groups"])
@@ -180,7 +140,6 @@ class Edcba:
         """
         """
         funcName = sys._getframe(1).f_code.co_name
-        pprint( funcName )
 
         #If we were given a release group extract album art list
         cover_art_list=None
@@ -205,10 +164,8 @@ class Edcba:
             except KeyError as e:
                 logger.warning( "Couldnt extract cover_art_list URL: %s"%(e) )
                 self.cover_art_url = None
-                #raise Exception
             except Exception as e:
                 logger.warning( "Couldnt extract cover_art_list URL: %s"%(e) )
-                #raise Exception
         else:
             logger.warning( "could not determine cover_art_url, there might not be any")
             self.cover_art_url = None
@@ -217,7 +174,6 @@ class Edcba:
         """
         """
         funcName = sys._getframe(1).f_code.co_name
-        pprint( funcName )
 
         try:
             d = cdio.Device(driver_id=pycdio.DRIVER_UNKNOWN)
@@ -242,29 +198,16 @@ class Edcba:
             pass
         d.close()
         logger.debug(self.release_track_list)
-        pprint( "2" )
     
         self.release_title_raw = self.release_album
         self.release_title_clean = clean_string( self.release_title_raw )
         if not self.release_id:
             self.release_id = self.release_title_clean
             self.release_id_short = self.release_title_clean
-        #self.release_artist = clean_string( self.args.artist )
-        #self.release_group_id = self.release_artist
-        #self.release_date = clean_string( self.args.year )
-        #self.release_year = self.release_date.split("-")[0]
-        #self.release_disc_number = self.args.release_disc_number
-        #self.release_genre = None
-    
 
     def get_from_musicbrainz(self):
         """
         """
-        funcName = sys._getframe(1).f_code.co_name
-        pprint( funcName )
-
-        #if self.args.disc_id:
-        #    self.disc_id = args.disc_id
         if self.disc_id:
             pass
         else:
@@ -274,12 +217,6 @@ class Edcba:
             except Exception as e:
                 logger.critical( "Error trying to read disc: %s"%(e) )
     
-        #if self.args.release_id:
-        #    self.release_id = self.args.release_id
-
-        #if self.args.release_group_id:
-        #    self.release_id = self.args.release_group_id
-
         try:
             result = self.get_musicbrainz_results()
         except Exception as e:
@@ -333,10 +270,6 @@ class Edcba:
         except:
             self.release_date = '0000-00-00'
             self.release_year = self.release_date.split("-")[0]
-    
-        #if self.args.release_group_id:
-        #   self.release_group_id = args.release_group_id
-        #    logger.info("release id: %s" % (self.disc_id) )
         else:
             try:
                 self.release_group_id = result['release-group']['id']
@@ -358,9 +291,6 @@ class Edcba:
 def main( args=None ):
     """
     """
-    funcName = sys._getframe(1).f_code.co_name
-    pprint( funcName )
-
     edcba = Edcba(args)
 
     if args.do_cdtext_tracks:
@@ -475,17 +405,24 @@ if __name__ == "__main__":
 
     #Args
     parser = argparse.ArgumentParser(description='CLI Flags or overrides')
-    parser.add_argument('-d', '--disc-id', dest='disc_id', help='Override release (cd) id from musicbrainz.', default=None, required=False, type=validate_disc_id)
-    parser.add_argument('-n', '--disc-number', dest='release_disc_number', help='Choose CD number in album, multi CD albums get one release-id and return N sets of tracks.', default=1, required=False, type=validate_disc_number)
-    parser.add_argument('-r', '--release', dest='release_id', help='Override release (cd) id with a release from musicbrainz.', default=None, required=False, type=validate_release_id)
-    parser.add_argument('-g', '--release-group-id', dest='release_group_id', help='Override release (cd) id with a release-group from musicbrainz.', default=None, required=False, type=validate_release_group_id)
-    parser.add_argument('-c', '--use-cdtext-tracks', dest='do_cdtext_tracks', help='Pull cdtext from cdtext instead of musicbrains', required=False, action='store_true')
+    parser.add_argument('--disc-id', dest='disc_id', help='Override release (cd) id from musicbrainz.', default=None, required=False, type=validate_disc_id)
+    parser.add_argument('--disc-number', dest='release_disc_number', help='Choose CD number in album, multi CD albums get one release-id and return N sets of tracks.', default=1, required=False, type=validate_disc_number)
+    parser.add_argument('--release', dest='release_id', help='Override release (cd) id with a release from musicbrainz.', default=None, required=False, type=validate_uuid)
+    parser.add_argument('--release-group-id', dest='release_group_id', help='Override release (cd) id with a release-group from musicbrainz.', default=None, required=False, type=validate_uuid)
     parser.add_argument('--album', dest='release_album', help='Override the album name.', default=None, required=False, type=str)
     parser.add_argument('--artist', dest='release_artist', help='Override the artist name.', default=None, required=False, type=str)
-    parser.add_argument('--year', dest='release_year', help='Override the release year.', default=None, required=False, type=str)
+    parser.add_argument('--year', dest='release_year', help='Override the release year.', default='0000', required=False, type=str)
     parser.add_argument('--date', dest='release_date', help='Override the release year.', default=None, required=False, type=str)
     parser.add_argument('--genre', dest='release_genre', help='Override the genre.', default=None, required=False, type=str)
+    parser.add_argument('--use-cdtext-tracks', dest='do_cdtext_tracks', help='Pull cdtext from cdtext instead of musicbrains', required=False, action='store_true')
+
     args = parser.parse_args()
+
+    #CDTEXT often doesnt have album info
+    if args.do_cdtext_tracks:
+        if not args.release_album:
+            logger.critical( "If --use-cdtext-tracks set, then MUST specify --album as well" )
+            exit( 1 ) 
 
     try: 
         main(args=args)
