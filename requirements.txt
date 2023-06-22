@@ -1,3 +1,7 @@
 discid
 musicbrainzngs
 requests
+uuid
+#pip install fails so used system pkg manager
+#pycdio
+
