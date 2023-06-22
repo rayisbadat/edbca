@@ -86,30 +86,67 @@ class Edcba:
     """
     """
     def __init__(self, args):
-        self.moo = "cow"
-        self.args = args
+        #self.args = args
+        funcName = sys._getframe(1).f_code.co_name
+        pprint( funcName )
 
-        #Values for cd
+        #Set default values to None
         self.cover_art_url = None
-        self.disc_id = None
         self.disc_index = None
         self.release_track_list = []
-
         self.release_title_raw = None
         self.release_title_clean = None
-        self.release_id = None
-        self.release_id_short = None
-        self.release_artist = None
-        self.release_group_id = None
-        self.release_date = None
-        self.release_year = None
-        self.release_disc_number = None
-        self.release_genre = None
+
+        #Set overrides we set via cmd line flags
+        if args.disc_id:
+            self.disc_id = args.disc_id
+        else:
+            self.disc_id = None
+        if args.release_id:
+            self.release_id = args.release_id
+            self.release_id_short = self.release_id.split("-")[0]
+        else:
+            self.release_id = None
+            self.release_id_short = None
+
+        if args.release_artist:
+            self.release_artist = args.release_artist
+        else:
+            self.release_artist = None
+
+        if args.release_album:
+            self.release_album = args.release_album
+        else:
+            self.release_album = None
+
+        if args.release_group_id:
+            self.release_group_id = args.release_group_id
+        else:
+            self.release_group_id = None
+
+        if args.release_date:
+            self.release_date = args.release_date
+        else:
+            self.release_date = None
+
+        if args.release_year:
+            self.release_year = args.release_year
+        elif args.release_date:
+            self.release_year = self.release_date.split("-")[0]
+        else:
+            self.release_year = None
+
+        self.release_disc_number = args.release_disc_number
+        self.release_genre = args.release_genre
+        pprint( "1")
 
 
-    def get_result(self):
+    def get_musicbrainz_results(self):
         """
         """
+        funcName = sys._getframe(1).f_code.co_name
+        pprint( funcName )
+
         try:
             if self.release_id:
                 result_raw = musicbrainzngs.get_release_by_id(self.release_id,includes=["artists", "recordings", "release-groups"])
@@ -142,6 +179,9 @@ class Edcba:
     def get_cover_art_url(self):
         """
         """
+        funcName = sys._getframe(1).f_code.co_name
+        pprint( funcName )
+
         #If we were given a release group extract album art list
         cover_art_list=None
     
@@ -176,12 +216,15 @@ class Edcba:
     def get_from_cdtext(self):
         """
         """
+        funcName = sys._getframe(1).f_code.co_name
+        pprint( funcName )
+
         try:
             d = cdio.Device(driver_id=pycdio.DRIVER_UNKNOWN)
             drive_name = d.get_device()
         except IOError:
             logger.critical("Problem finding a CD-ROM")
-            sys.exit(1)
+            raise Exception
         
         # Show CD-Text for an audio CD
         cdt = d.get_cdtext()
@@ -198,23 +241,32 @@ class Edcba:
                 pass
             pass
         d.close()
+        logger.debug(self.release_track_list)
+        pprint( "2" )
     
-        self.release_title_raw = self.args.album
+        self.release_title_raw = self.release_album
         self.release_title_clean = clean_string( self.release_title_raw )
-        self.release_id = self.release_title_clean
-        self.release_id_short = self.release_title_clean
-        self.release_artist = clean_string( self.args.artist )
-        self.release_group_id = self.release_artist
-        self.release_date = clean_string( self.args.year )
-        self.release_year = self.release_date.split("-")[0]
-        self.release_disc_number = self.args.disc_number
-        self.release_genre = None
+        if not self.release_id:
+            self.release_id = self.release_title_clean
+            self.release_id_short = self.release_title_clean
+        #self.release_artist = clean_string( self.args.artist )
+        #self.release_group_id = self.release_artist
+        #self.release_date = clean_string( self.args.year )
+        #self.release_year = self.release_date.split("-")[0]
+        #self.release_disc_number = self.args.release_disc_number
+        #self.release_genre = None
+    
 
     def get_from_musicbrainz(self):
         """
         """
-        if self.args.disc_id:
-            self.disc_id = args.disc_id
+        funcName = sys._getframe(1).f_code.co_name
+        pprint( funcName )
+
+        #if self.args.disc_id:
+        #    self.disc_id = args.disc_id
+        if self.disc_id:
+            pass
         else:
             try: 
                 disc = discid.read()  # use default device
@@ -222,20 +274,20 @@ class Edcba:
             except Exception as e:
                 logger.critical( "Error trying to read disc: %s"%(e) )
     
-        if self.args.release_id:
-            self.release_id = self.args.release_id
+        #if self.args.release_id:
+        #    self.release_id = self.args.release_id
 
-        if self.args.release_group_id:
-            self.release_id = self.args.release_group_id
+        #if self.args.release_group_id:
+        #    self.release_id = self.args.release_group_id
 
         try:
-            result = self.get_result()
+            result = self.get_musicbrainz_results()
         except Exception as e:
             logger.critical( "Error trying to get disc/release info from musicbrainz: %s"%(e) )
             raise Exception
     
         #Default args.disc_number of 0 means this will get set to -1 and tryigger the auto indexer code below
-        self.disc_index = self.args.disc_number - 1
+        self.disc_index = self.release_disc_number - 1
     
         #Get track from multi disc sets
         if self.disc_index < 0:
@@ -282,9 +334,9 @@ class Edcba:
             self.release_date = '0000-00-00'
             self.release_year = self.release_date.split("-")[0]
     
-        if self.args.release_group_id:
-            self.release_group_id = args.release_group_id
-            logger.info("release id: %s" % (self.disc_id) )
+        #if self.args.release_group_id:
+        #   self.release_group_id = args.release_group_id
+        #    logger.info("release id: %s" % (self.disc_id) )
         else:
             try:
                 self.release_group_id = result['release-group']['id']
@@ -306,6 +358,9 @@ class Edcba:
 def main( args=None ):
     """
     """
+    funcName = sys._getframe(1).f_code.co_name
+    pprint( funcName )
+
     edcba = Edcba(args)
 
     if args.do_cdtext_tracks:
@@ -416,19 +471,20 @@ def main( args=None ):
   
 if __name__ == "__main__":
 
-    #Set up logging
-    #funcName = __name__
+    funcName = __name__
 
     #Args
     parser = argparse.ArgumentParser(description='CLI Flags or overrides')
     parser.add_argument('-d', '--disc-id', dest='disc_id', help='Override release (cd) id from musicbrainz.', default=None, required=False, type=validate_disc_id)
-    parser.add_argument('-n', '--disc-number', dest='disc_number', help='Choose CD number in album, multi CD albums get one release-id and return N sets of tracks.', default=0, required=False, type=validate_disc_number)
+    parser.add_argument('-n', '--disc-number', dest='release_disc_number', help='Choose CD number in album, multi CD albums get one release-id and return N sets of tracks.', default=1, required=False, type=validate_disc_number)
     parser.add_argument('-r', '--release', dest='release_id', help='Override release (cd) id with a release from musicbrainz.', default=None, required=False, type=validate_release_id)
     parser.add_argument('-g', '--release-group-id', dest='release_group_id', help='Override release (cd) id with a release-group from musicbrainz.', default=None, required=False, type=validate_release_group_id)
     parser.add_argument('-c', '--use-cdtext-tracks', dest='do_cdtext_tracks', help='Pull cdtext from cdtext instead of musicbrains', required=False, action='store_true')
-    parser.add_argument('-a', '--album', dest='album', help='Override the album name.', default=None, required=False, type=str)
-    parser.add_argument('-s', '--artist', dest='artist', help='Override the artist name.', default=None, required=False, type=str)
-    parser.add_argument('-y', '--year', dest='year', help='Override the release year.', default=None, required=False, type=str)
+    parser.add_argument('--album', dest='release_album', help='Override the album name.', default=None, required=False, type=str)
+    parser.add_argument('--artist', dest='release_artist', help='Override the artist name.', default=None, required=False, type=str)
+    parser.add_argument('--year', dest='release_year', help='Override the release year.', default=None, required=False, type=str)
+    parser.add_argument('--date', dest='release_date', help='Override the release year.', default=None, required=False, type=str)
+    parser.add_argument('--genre', dest='release_genre', help='Override the genre.', default=None, required=False, type=str)
     args = parser.parse_args()
 
     try: 
