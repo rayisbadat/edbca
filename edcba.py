@@ -140,7 +140,7 @@ class Edcba:
         """
         """
         #If we were given a release group extract album art list
-        cover_art_list=None
+        cover_art_list = None
     
         # Try to pull album art from release and if not try release-group
         if self.release_id:
@@ -149,7 +149,8 @@ class Edcba:
             except:
                 cover_art_list=None
                 logger.debug("Could not pull image list from release group id: %s"%( self.release_group_id ) )
-        elif self.release_group_id:
+
+        if self.release_group_id and not cover_art_list:
             try:
                 cover_art_list=musicbrainzngs.get_release_group_image_list( self.release_group_id )
             except:
@@ -167,7 +168,7 @@ class Edcba:
         else:
             logger.warning( "could not determine cover_art_url, there might not be any")
             self.cover_art_url = None
-    
+
     def get_from_cdtext(self):
         """
         """
@@ -280,7 +281,7 @@ class Edcba:
             self.release_genre = None
     
         #Get the cover art url if possible
-        self.cover_art_url =  self.get_cover_art_url()
+        self.get_cover_art_url()
     
 
 ###### Main ######
@@ -290,10 +291,10 @@ def main( args=None ):
     edcba = Edcba(args)
 
     if args.do_cdtext_tracks:
-        result = edcba.get_from_cdtext()
+        edcba.get_from_cdtext()
     else:
-        result = edcba.get_from_musicbrainz()
-        
+        edcba.get_from_musicbrainz()
+
     #Print out harvested cd info
     logger.info( "Disc id: %s" %( edcba.disc_id ) )
     logger.info( "Release id: %s" %( edcba.release_id ) )
