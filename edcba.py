@@ -139,8 +139,6 @@ class Edcba:
     def get_cover_art_url(self):
         """
         """
-        funcName = sys._getframe(1).f_code.co_name
-
         #If we were given a release group extract album art list
         cover_art_list=None
     
@@ -150,13 +148,13 @@ class Edcba:
                 cover_art_list = musicbrainzngs.get_image_list( self.release_id )
             except:
                 cover_art_list=None
-                logger.debug("Could not pull image list from release group id: %s"%( release_group_id ) )
+                logger.debug("Could not pull image list from release group id: %s"%( self.release_group_id ) )
         elif self.release_group_id:
             try:
-                cover_art_list=musicbrainzngs.get_release_group_image_list( release_group_id )
+                cover_art_list=musicbrainzngs.get_release_group_image_list( self.release_group_id )
             except:
                 cover_art_list=None
-                logger.debug("Could not pull image list from release group id: %s"%( release_group_id ) )
+                logger.debug("Could not pull image list from release group id: %s"%( self.release_group_id ) )
 
         if cover_art_list:
             try:
@@ -173,8 +171,6 @@ class Edcba:
     def get_from_cdtext(self):
         """
         """
-        funcName = sys._getframe(1).f_code.co_name
-
         try:
             d = cdio.Device(driver_id=pycdio.DRIVER_UNKNOWN)
             drive_name = d.get_device()
@@ -400,8 +396,6 @@ def main( args=None ):
 
   
 if __name__ == "__main__":
-
-    funcName = __name__
 
     #Args
     parser = argparse.ArgumentParser(description='CLI Flags or overrides')
