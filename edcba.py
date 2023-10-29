@@ -365,8 +365,8 @@ def main( args=None ):
 
         tag_flags = '--artist "%s" --album "%s" --title "%s" --date "%s" --tracknum "%s" --comment "albumartist=%s" --comment "CDDB=%s"'%(
             edcba.release_artist,
-            edcba.release_title_raw,
-            track_title_raw,
+            edcba.release_title_clean,
+            track_title_clean,
             edcba.release_date,
             track_number,
             edcba.release_artist,
